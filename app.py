@@ -1,8 +1,10 @@
-from flask import Flask, request, render_template, redirect, url_for, session, flash
+from flask import Flask, request, render_template, redirect, url_for, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from datetime import datetime, timedelta
 import os
+import qrcode
+from io import BytesIO
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///locations.db'
@@ -49,28 +51,6 @@ def to_datetime_filter(value):
 def index():
     return render_template('index.html')
 
-@app.route('/scan', methods=['GET', 'POST'])
-def scan():
-    if request.method == 'POST':
-        location_data = request.form.get('location_data')
-        if location_data:
-            try:
-                name, gps, description = location_data.split('|')
-                location = Location.query.filter_by(name=name).first()
-                if not location:
-                    location = Location(name=name, gps=gps, description=description)
-                    db.session.add(location)
-                    db.session.commit()
-
-                return redirect(url_for('location', location_id=location.id))
-            except ValueError:
-                return "Invalid QR Code data format.", 400
-    return render_template('scan.html')
-
-def ensure_upload_folder_exists():
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
-
 @app.route('/location/<int:location_id>', methods=['GET', 'POST'])
 def location(location_id):
     location = Location.query.get_or_404(location_id)
@@ -93,12 +73,36 @@ def location(location_id):
             new_photo = Photo(filename=filename, caption=caption, rating=rating, location_id=location_id, session_id=session_id, expiry_time=expiry_time)
             db.session.add(new_photo)
             db.session.commit()
-
         return redirect(url_for('location', location_id=location_id))
         
     photos = Photo.query.filter_by(location_id=location_id).all()
     experiences = Experience.query.filter_by(location_id=location_id).all()
     return render_template('location.html', location=location, photos=photos, experiences=experiences)
+
+@app.route('/generate_qr/<int:location_id>')
+def generate_qr(location_id):
+    location = Location.query.get_or_404(location_id)
+    location_url = url_for('location', location_id=location.id, _external=True)
+    
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(location_url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = BytesIO()
+    img.save(buf)
+    buf.seek(0)
+    
+    return send_file(buf, mimetype='image/png', as_attachment=True, download_name=f'{location.name}_qr.png')
+
+def ensure_upload_folder_exists():
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'])
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -134,7 +138,6 @@ def delete_photo(photo_id):
     else:
         flash("You are not authorized to delete this photo.")
     return redirect(request.referrer)
-
 
 @app.context_processor
 def inject_now():
