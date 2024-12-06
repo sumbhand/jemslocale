@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 import qrcode
 from io import BytesIO
+from werkzeug.utils import secure_filename  
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///locations.db'
