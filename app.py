@@ -98,76 +98,67 @@ def location(location_id):
     return render_template('location.html', location=location, photos=photos, experiences=experiences)
 
 
-@app.route('/generate_qr', methods=['GET', 'POST'])
-def generate_qr():
-    if session.get('session_id') != ADMIN_SESSION_ID:
-        flash("You are not authorized to generate a QR code.")
+@app.route('/generate_qr', methods=['GET', 'POST'])  
+def generate_qr():  
+    if session.get('session_id') != ADMIN_SESSION_ID:  
+        flash("You are not authorized to generate a QR code.")  
         return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        location_id = request.form.get('location_id')
-        name = request.form.get('name')
-        description = request.form.get('description')
-        photo = request.files.get('photo')
-
-        if location_id:
-            location = Location.query.get_or_404(location_id)
-        else:
-            # Handle new location creation
-            if not name or not description or not photo:
-                flash("Name, description, and photo are required for creating a new location.")
-                return redirect(url_for('generate_qr'))
-
-            ensure_upload_folder_exists()
-            filename = f"{name.replace(' ', '_')}_{photo.filename.replace(' ', '_')}"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            photo.save(filepath)
-
-            location = Location(
-                name=name, 
-                description=description, 
-                gps="0.0", 
-                photo_filename=filename
-            )
-            db.session.add(location)
-            db.session.commit()
-
-        # Construct the URL of the location's detail page
-        location_url = url_for('location', location_id=location.id, _external=True)
-        
-        # Update the location with the generated URL and save it to the database
-        location.url = location_url
-        db.session.commit()
-
-        # Print the URL in the console
-        print(f"Location URL: {location_url}")
-
-        photo_url = url_for('static', filename=f"uploads/{location.photo_filename}") if location.photo_filename else 'No Photo'
-        
-        qr_data = {
-            "url": location_url,
-            "name": location.name,
-            "description": location.description,
-            "photo_url": photo_url
-        }
-        
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_data)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        buf = BytesIO()
-        img.save(buf)
-        buf.seek(0)
-        
-        return send_file(buf, mimetype='image/png', as_attachment=True, download_name=f'{location.name}_qr.png')
-    
-    locations = Location.query.all()
+      
+    if request.method == 'POST':  
+        location_id = request.form.get('location_id')  
+        name = request.form.get('name')  
+        description = request.form.get('description')  
+        photo = request.files.get('photo')  
+  
+        if location_id:  
+            location = Location.query.get_or_404(location_id)  
+        else:  
+            # Handle new location creation  
+            if not name or not description or not photo:  
+                flash("Name, description, and photo are required for creating a new location.")  
+                return redirect(url_for('generate_qr'))  
+  
+            ensure_upload_folder_exists()  
+            filename = f"{name.replace(' ', '_')}_{photo.filename.replace(' ', '_')}"  
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)  
+            photo.save(filepath)  
+  
+            location = Location(  
+                name=name,   
+                description=description,   
+                gps="0.0",   
+                photo_filename=filename  
+            )  
+            db.session.add(location)  
+            db.session.commit()  
+  
+        # Construct the URL of the location's detail page  
+        location_url = url_for('location', location_id=location.id, _external=True)  
+          
+        # Update the location with the generated URL and save it to the database  
+        location.url = location_url  
+        db.session.commit()  
+  
+        # Print the URL in the console  
+        print(f"Location URL: {location_url}")  
+  
+        qr = qrcode.QRCode(  
+            version=1,  
+            error_correction=qrcode.constants.ERROR_CORRECT_L,  
+            box_size=10,  
+            border=4,  
+        )  
+        qr.add_data(location_url)  
+        qr.make(fit=True)  
+          
+        img = qr.make_image(fill_color="black", back_color="white")  
+        buf = BytesIO()  
+        img.save(buf)  
+        buf.seek(0)  
+          
+        return send_file(buf, mimetype='image/png', as_attachment=True, download_name=f'{location.name}_qr.png')  
+      
+    locations = Location.query.all()  
     return render_template('generate_qr.html', locations=locations)
 
 
