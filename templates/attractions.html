@@ -1,68 +1,149 @@
 {% extends "base.html" %}
 
-{% block title %}Local Attractions{% endblock %}
+{% block title %}Discover Local Attractions{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
-        <h1>Local Attractions</h1>
-        <div class="row">
-            {% for attraction in attractions %}
-            <div class="col-md-4 mb-4">
-                <div class="card">
+<div class="container-fluid px-3 px-md-4 py-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-6 text-primary mb-3 text-center">Discover Local Attractions</h1>
+            <p class="text-muted text-center mb-4">Explore the best experiences in our destination</p>
+        </div>
+    </div>
+
+    <div class="row g-3 g-md-4">
+        {% for attraction in attractions %}
+        <div class="col-12 col-sm-6 col-md-6 col-lg-4 mb-3">
+            <div class="card h-100 shadow-sm border-0 attraction-card">
+                <div class="position-relative attraction-image-container">
                     {% if attraction.photos %}
-                    <div id="carousel-{{ attraction.id }}" class="carousel slide" data-ride="carousel">
-                        <div class="carousel-inner">
+                    <div id="carousel-{{ attraction.id }}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-inner rounded-top">
                             {% for photo in attraction.photos %}
                             <div class="carousel-item {% if loop.first %}active{% endif %}">
-                                <img src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}" class="d-block w-100 attraction-photo" alt="Attraction Photo">
+                                <img src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}" 
+                                     class="d-block w-100 attraction-photo" 
+                                     alt="{{ attraction.name }} Photo">
                             </div>
                             {% endfor %}
                         </div>
-                        <a class="carousel-control-prev" href="#carousel-{{ attraction.id }}" role="button" data-slide="prev">
-                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                            <span class="sr-only">Previous</span>
-                        </a>
-                        <a class="carousel-control-next" href="#carousel-{{ attraction.id }}" role="button" data-slide="next">
-                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                            <span class="sr-only">Next</span>
-                        </a>
                     </div>
                     {% else %}
-                    <img src="placeholder-image.jpg" class="d-block w-100 attraction-photo" alt="Placeholder Photo">
+                    <img src="{{ url_for('static', filename='images/placeholder-image.jpg') }}" 
+                         class="card-img-top attraction-photo" 
+                         alt="Placeholder Image">
                     {% endif %}
-                    <div class="card-body">
-                        <h5 class="card-title">{{ attraction.name }}</h5>
-                        <p class="card-text">{{ attraction.description[:100] }}...</p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="badge badge-primary">{{ attraction.category.value }}</span>
-                            <span class="badge badge-info">{{ attraction.weather_suitability.value }}</span>
+                </div>
+
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title fw-bold mb-2">{{ attraction.name }}</h5>
+                    <p class="card-text text-muted flex-grow-1 small">
+                        {{ attraction.description[:120] }}{% if attraction.description|length > 120 %}...{% endif %}
+                    </p>
+
+                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mt-2">
+                        <div class="d-flex gap-2 mb-2 mb-sm-0">
+                            <span class="badge bg-primary text-truncate">{{ attraction.category.value }}</span>
+                            <span class="badge bg-info text-truncate">{{ attraction.weather_suitability.value }}</span>
                         </div>
-                        <a href="{{ url_for('attraction_detail', attraction_id=attraction.id) }}" class="btn btn-primary btn-sm mt-2">View Details</a>
+                        <a href="{{ url_for('attraction_detail', attraction_id=attraction.id) }}" 
+                           class="btn btn-outline-primary btn-sm w-100 w-sm-auto text-nowrap">
+                            Explore More
+                        </a>
                     </div>
                 </div>
             </div>
-            {% endfor %}
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center" role="alert">
+                No attractions found. Check back later for updates!
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if attractions|length > 9 %}
+    <div class="row mt-3">
+        <div class="col-12 text-center">
+            <a href="{{ url_for('all_attractions') }}" class="btn btn-primary w-100 w-md-auto">
+                View All Attractions
+            </a>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_css %}
 <style>
+    :root {
+        --primary-color: #007bff;
+        --secondary-color: #6c757d;
+        --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+        font-family: var(--font-family-base);
+        background-color: #f8f9fa;
+    }
+
+    .attraction-image-container {
+        height: 200px; /* Fixed height for the image container */
+        overflow: hidden;
+    }
+
     .attraction-photo {
         width: 100%;
-        height: 200px;
+        height: 100%;
         object-fit: cover;
+        object-position: center;
+        transition: transform 0.3s ease;
     }
-    .carousel-inner {
-        height: 200px; /* Ensure the carousel maintains a consistent height */
+
+    .attraction-card {
+        height: 100%; /* Ensure the card takes the full height of its container */
+        max-height: 380px; /* Fixed max height for the card */
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .attraction-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+    }
+
+    .card-body {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .btn-outline-primary {
+        max-width: 150px;
+    }
+
+    @media (max-width: 576px) {
+        .display-6 {
+            font-size: 1.5rem;
+        }
+
+        .attraction-card .badge {
+            font-size: 0.65rem;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .attraction-image-container {
+            height: 150px;
+        }
     }
 </style>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js" integrity="sha384-IQsoLXl2p+P8pBO8OcF9+K6hcKmrfhXd0R1WhJIEsyIWn6R+Olm71rBxJKBBF+Ao4" crossorigin="anonymous"></script>
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.6.0/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
 {% endblock %}
