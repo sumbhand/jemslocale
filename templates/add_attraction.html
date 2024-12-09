@@ -1,0 +1,49 @@
+<!-- templates/add_attraction_form.html -->
+{% extends "base.html" %}
+
+{% block title %}Add New Attraction{% endblock %}
+
+{% block content %}
+<h1>Add New Attraction</h1>
+<form method="POST" action="{{ url_for('add_attraction') }}" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" class="form-control" name="name" required>
+    </div>
+    <div class="form-group">
+        <label for="description">Description</label>
+        <textarea class="form-control" name="description" rows="3" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="latitude">Latitude</label>
+        <input type="text" class="form-control" name="latitude" required>
+    </div>
+    <div class="form-group">
+        <label for="longitude">Longitude</label>
+        <input type="text" class="form-control" name="longitude" required>
+    </div>
+    <div class="form-group">
+        <label for="category">Category</label>
+        <select class="form-control" name="category" required>
+            <!-- Populate with categories -->
+            {% for category in categories %}
+            <option value="{{ category }}">{{ category }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="weather">Weather Suitability</label>
+        <select class="form-control" name="weather" required>
+            <!-- Populate with weather suitabilities -->
+            {% for weather in weathers %}
+            <option value="{{ weather }}">{{ weather }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="photos">Photos</label>
+        <input type="file" class="form-control-file" name="photos" multiple accept="image/*">
+    </div>
+    <button type="submit" class="btn btn-primary">Add Attraction</button>
+</form>
+{% endblock %}

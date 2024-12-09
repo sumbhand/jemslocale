@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorized Attractions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Categorized Attractions</h1>
+        <nav>
+            <a href="{{ url_for('index') }}">Home</a>
+            <a href="{{ url_for('add_location') }}">Add Attraction</a>
+        </nav>
+    </header>
+    <main>
+        <section class="search-bar">
+            <input type="text" placeholder="Search attractions..." id="search">
+        </section>
+        <section class="categories">
+            <h2>Weather</h2>
+            {% for weather, locs in categories.weather.items() %}
+            <div class="category-group">
+                <h3>{{ weather }}</h3>
+                <ul>
+                    {% for location in locs %}
+                    <li>
+                        <a href="{{ url_for('location', location_id=location.id) }}">
+                            <img src="{{ url_for('static', filename='uploads/' ~ location.photo_filename) }}" alt="{{ location.name }}">
+                            <h3>{{ location.name }}</h3>
+                            <p>{{ location.description }}</p>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+            <!-- Repeat above section for 'directions', 'distance', and 'type' categories -->
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2023 Local Attractions</p>
+    </footer>
+</body>
+</html>

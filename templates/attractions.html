@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Local Attractions{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>Local Attractions</h1>
+        <div class="row">
+            {% for attraction in attractions %}
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    {% if attraction.photos %}
+                    <div id="carousel-{{ attraction.id }}" class="carousel slide" data-ride="carousel">
+                        <div class="carousel-inner">
+                            {% for photo in attraction.photos %}
+                            <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                <img src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}" class="d-block w-100 attraction-photo" alt="Attraction Photo">
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <a class="carousel-control-prev" href="#carousel-{{ attraction.id }}" role="button" data-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="sr-only">Previous</span>
+                        </a>
+                        <a class="carousel-control-next" href="#carousel-{{ attraction.id }}" role="button" data-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="sr-only">Next</span>
+                        </a>
+                    </div>
+                    {% else %}
+                    <img src="placeholder-image.jpg" class="d-block w-100 attraction-photo" alt="Placeholder Photo">
+                    {% endif %}
+                    <div class="card-body">
+                        <h5 class="card-title">{{ attraction.name }}</h5>
+                        <p class="card-text">{{ attraction.description[:100] }}...</p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="badge badge-primary">{{ attraction.category.value }}</span>
+                            <span class="badge badge-info">{{ attraction.weather_suitability.value }}</span>
+                        </div>
+                        <a href="{{ url_for('attraction_detail', attraction_id=attraction.id) }}" class="btn btn-primary btn-sm mt-2">View Details</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .attraction-photo {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+    }
+    .carousel-inner {
+        height: 200px; /* Ensure the carousel maintains a consistent height */
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js" integrity="sha384-IQsoLXl2p+P8pBO8OcF9+K6hcKmrfhXd0R1WhJIEsyIWn6R+Olm71rBxJKBBF+Ao4" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.6.0/js/bootstrap.min.js"></script>
+{% endblock %}

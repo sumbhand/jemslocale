@@ -1,209 +1,310 @@
-from flask import Flask, request, render_template, redirect, url_for, send_file, session, flash
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from models import db, Attraction, Photo, Review, User, AttractionCategory, WeatherSuitability
+from geopy.distance import geodesic
 import os
 import qrcode
-from io import BytesIO
-from werkzeug.utils import secure_filename  
+import uuid
+from datetime import datetime
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///locations.db'
-app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SECRET_KEY'] = 'your_secret_key_here'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///attraction.db'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-ADMIN_SESSION_ID = 'admin_session'
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
-class Location(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
-    gps = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(200), nullable=False)
-    photo_filename = db.Column(db.String(100), nullable=True)
-    url = db.Column(db.String(200), nullable=False, default="")
-    photos = db.relationship('Photo', backref='location', lazy=True)
-    experiences = db.relationship('Experience', backref='location', lazy=True)
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-class Photo(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(100), nullable=False)
-    caption = db.Column(db.Text, nullable=True)
-    rating = db.Column(db.Integer, nullable=False)
-    location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
-    session_id = db.Column(db.String(100), nullable=False)
-    expiry_time = db.Column(db.DateTime, nullable=False)
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-class Experience(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    rating = db.Column(db.Integer, nullable=False)
-    location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
 
 with app.app_context():
     db.create_all()
 
-@app.template_filter('to_datetime')
-def to_datetime_filter(value):
-    if isinstance(value, datetime):
-        return value
-    return datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+def generate_unique_filename(filename):
+    """Generate a unique filename to prevent overwriting"""
+    ext = os.path.splitext(filename)[1]
+    unique_filename = str(uuid.uuid4()) + ext
+    return unique_filename
+
+def generate_attraction_qr(attraction):
+    """Generate QR code for an attraction"""
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(f"Attraction: {attraction.name}\nDescription: {attraction.description}")
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    filename = f"qr_{attraction.id}.png"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    img.save(filepath)
+    return filename
+
+def rank_attractions(attractions, user_location=None):
+    """
+    Rank attractions based on multiple factors:
+    1. Average rating
+    2. Total visits
+    3. Distance from user (if location provided)
+    """
+    def calculate_score(attraction):
+        rating_weight = attraction.average_rating * 2 if attraction.average_rating else 0
+        visits_weight = attraction.total_visits * 0.5 if attraction.total_visits else 0
+        
+        distance_weight = 0
+        if user_location:
+            # Calculate distance penalty/bonus
+            distance = geodesic(user_location, (attraction.latitude, attraction.longitude)).kilometers
+            distance_weight = max(10 - (distance * 0.1), 0)  # Closer attractions get bonus points
+        
+        return rating_weight + visits_weight + distance_weight
+
+    return sorted(attractions, key=calculate_score, reverse=True)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    """Home page with featured attractions"""
+    featured_attractions = rank_attractions(Attraction.query.limit(6).all())
+    return render_template('index.html', attractions=featured_attractions)
 
-@app.route('/location/<int:location_id>', methods=['GET', 'POST'])
-def location(location_id):
-    location = Location.query.get_or_404(location_id)
+@app.route('/attractions')
+def list_attractions():
+    """List attractions with optional filtering"""
+    category = request.args.get('category')
+    weather = request.args.get('weather')
+    
+    query = Attraction.query
+    if category:
+        query = query.filter(Attraction.category == category)
+    if weather:
+        query = query.filter(Attraction.weather_suitability == weather)
+    
+    attractions = rank_attractions(query.all())
+    return render_template('attractions.html', attractions=attractions)
+
+@app.route('/attraction/<int:attraction_id>', methods=['GET', 'POST'])
+@login_required
+def attraction_detail(attraction_id):
+    attraction = Attraction.query.get_or_404(attraction_id)
     if request.method == 'POST':
-        if 'photo' in request.files and 'caption' in request.form and 'rating' in request.form:
+        # Handle photo upload and post creation
+        if 'photo' in request.files:
             photo = request.files['photo']
-            caption = request.form['caption']
-            rating = int(request.form['rating'])
-            session_id = session.get('session_id')
-            expiry_time = datetime.utcnow() + timedelta(minutes=5)
+            if photo and allowed_file(photo.filename):
+                filename = secure_filename(photo.filename)
+                photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                # Assuming you have a Photo model with fields `filename`, `caption`, `rating`, `attraction_id`, `user_id`
+                new_photo = Photo(
+                    filename=filename,
+                    caption=request.form['caption'],
+                    rating=int(request.form['rating']),
+                    attraction_id=attraction_id,
+                    user_id=current_user.id,  # Set the current user's ID
+                    upload_date=datetime.utcnow()  # Assuming you have an upload_date field
+                )
+                db.session.add(new_photo)
+                db.session.commit()
+                flash('Photo posted successfully!', 'success')
+                return redirect(url_for('attraction_detail', attraction_id=attraction_id))
 
-            if not session_id:
-                session_id = os.urandom(16).hex()
-                session['session_id'] = session_id
+    photos = Photo.query.filter_by(attraction_id=attraction_id).all()
+    return render_template('attraction_detail.html', attraction=attraction, photos=photos)
 
-            ensure_upload_folder_exists()
-            filename = secure_filename(f"{location.name.replace(' ', '_')}_{photo.filename.replace(' ', '_')}")
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            photo.save(filepath)
-            new_photo = Photo(filename=filename, caption=caption, rating=rating, location_id=location_id, session_id=session_id, expiry_time=expiry_time)
-            db.session.add(new_photo)
-            db.session.commit()
-            
-            # Update Location with the latest photo
-            location.photo_filename = filename
-            db.session.commit()
 
-        if 'name' in request.form and 'description' in request.form:
-            location.name = request.form['name']
-            location.description = request.form['description']
-            if 'cover_photo' in request.files:
-                cover_photo = request.files['cover_photo']
-                filename = secure_filename(f"{location.name.replace(' ', '_')}_{cover_photo.filename.replace(' ', '_')}")
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                cover_photo.save(filepath)
-                location.photo_filename = filename
-            db.session.commit()
-
-        return redirect(url_for('location', location_id=location_id))
+@app.route('/add_attraction', methods=['GET', 'POST'])
+@login_required
+def add_attraction():
+    """Add a new attraction"""
+    if request.method == 'POST':
+        # Extract form data
+        name = request.form['name']
+        description = request.form['description']
+        latitude = float(request.form['latitude'])
+        longitude = float(request.form['longitude'])
+        category = AttractionCategory(request.form['category'])
+        weather = WeatherSuitability(request.form['weather'])
         
-    photos = Photo.query.filter_by(location_id=location_id).all()
-    experiences = Experience.query.filter_by(location_id=location_id).all()
-    return render_template('location.html', location=location, photos=photos, experiences=experiences)
+        # Create new attraction
+        new_attraction = Attraction(
+            name=name,
+            description=description,
+            latitude=latitude,
+            longitude=longitude,
+            category=category,
+            weather_suitability=weather,
+            average_rating=0,
+            total_visits=0
+        )
+        
+        db.session.add(new_attraction)
+        db.session.commit()
 
+        # Handle photo uploads
+        if 'photos' in request.files:
+            photos = request.files.getlist('photos')
+            for photo in photos:
+                if photo and allowed_file(photo.filename):
+                    filename = secure_filename(photo.filename)
+                    photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    # Assuming you have a Photo model with fields `filename`, `attraction_id`, and `user_id`
+                    new_photo = Photo(
+                        filename=filename,
+                        attraction_id=new_attraction.id,
+                        user_id=current_user.id,  # Set the current user's ID
+                        upload_date=datetime.utcnow()  # Assuming you also have an upload_date field
+                    )
+                    db.session.add(new_photo)
+            db.session.commit()
+        
+        flash('Attraction added successfully!', 'success')
+        return redirect(url_for('attraction_detail', attraction_id=new_attraction.id))
+    
+    # Render the form to add a new attraction
+    categories = [category.value for category in AttractionCategory]
+    weathers = [weather.value for weather in WeatherSuitability]
+    return render_template('add_attraction.html', categories=categories, weathers=weathers)
 
-@app.route('/generate_qr', methods=['GET', 'POST'])  
-def generate_qr():  
-    if session.get('session_id') != ADMIN_SESSION_ID:  
-        flash("You are not authorized to generate a QR code.")  
-        return redirect(url_for('index'))
-      
-    if request.method == 'POST':  
-        location_id = request.form.get('location_id')  
-        name = request.form.get('name')  
-        description = request.form.get('description')  
-        photo = request.files.get('photo')  
-  
-        if location_id:  
-            location = Location.query.get_or_404(location_id)  
-        else:  
-            # Handle new location creation  
-            if not name or not description or not photo:  
-                flash("Name, description, and photo are required for creating a new location.")  
-                return redirect(url_for('generate_qr'))  
-  
-            ensure_upload_folder_exists()  
-            filename = f"{name.replace(' ', '_')}_{photo.filename.replace(' ', '_')}"  
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)  
-            photo.save(filepath)  
-  
-            location = Location(  
-                name=name,   
-                description=description,   
-                gps="0.0",   
-                photo_filename=filename  
-            )  
-            db.session.add(location)  
-            db.session.commit()  
-  
-        # Construct the URL of the location's detail page  
-        location_url = url_for('location', location_id=location.id, _external=True)  
-          
-        # Update the location with the generated URL and save it to the database  
-        location.url = location_url  
-        db.session.commit()  
-  
-        # Print the URL in the console  
-        print(f"Location URL: {location_url}")  
-  
-        qr = qrcode.QRCode(  
-            version=1,  
-            error_correction=qrcode.constants.ERROR_CORRECT_L,  
-            box_size=10,  
-            border=4,  
-        )  
-        qr.add_data(location_url)  
-        qr.make(fit=True)  
-          
-        img = qr.make_image(fill_color="black", back_color="white")  
-        buf = BytesIO()  
-        img.save(buf)  
-        buf.seek(0)  
-          
-        return send_file(buf, mimetype='image/png', as_attachment=True, download_name=f'{location.name}_qr.png')  
-      
-    locations = Location.query.all()  
-    return render_template('generate_qr.html', locations=locations)
+@app.route('/add_photo/<int:attraction_id>', methods=['POST'])
+@login_required
+def add_photo(attraction_id):
+    """Add a photo to an attraction"""
+    attraction = Attraction.query.get_or_404(attraction_id)
+    
+    # Handle photo upload
+    if 'photo' not in request.files:
+        flash('No file part', 'danger')
+        return redirect(url_for('attraction_detail', attraction_id=attraction_id))
+    
+    file = request.files['photo']
+    if file.filename == '':
+        flash('No selected file', 'danger')
+        return redirect(url_for('attraction_detail', attraction_id=attraction_id))
+    
+    # Generate unique filename
+    filename = generate_unique_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    
+    # Create photo entry
+    new_photo = Photo(
+        filename=filename,
+        caption=request.form['caption'],
+        attraction_id=attraction_id,
+        user_id=current_user.id
+    )
+    db.session.add(new_photo)
+    
+    # Create review entry
+    new_review = Review(
+        rating=int(request.form['rating']),
+        comment=request.form['caption'],
+        attraction_id=attraction_id,
+        user_id=current_user.id,
+        visit_date=datetime.utcnow()
+    )
+    db.session.add(new_review)
+    
+    # Update attraction statistics
+    attraction.total_visits += 1
+    attraction.average_rating = (attraction.average_rating * (attraction.total_visits - 1) + new_review.rating) / attraction.total_visits
+    
+    db.session.commit()
+    
+    flash('Photo and review added successfully!', 'success')
+    return redirect(url_for('attraction_detail', attraction_id=attraction_id))
 
-
-def ensure_upload_folder_exists():
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """User login"""
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username == 'admin' and password == 'adminpass':
-            session['session_id'] = ADMIN_SESSION_ID
-            flash("Logged in as admin.")
-        else:
-            flash("Invalid credentials.")
-        return redirect(url_for('index'))
+        user = User.query.filter_by(username=username).first()
+        
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            flash('Login successful!', 'success')
+            return redirect(url_for('index'))
+        
+        flash('Invalid username or password', 'danger')
+    
     return render_template('login.html')
 
-@app.route('/logout')
-def logout():
-    session.pop('session_id', None)
-    flash("Logged out.")
-    return redirect(url_for('index'))
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration"""
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+        
+        # Check if user already exists
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists', 'danger')
+            return redirect(url_for('register'))
+        
+        # Hash the password
+        hashed_password = generate_password_hash(password)
+        
+        # Create new user
+        new_user = User(
+            username=username, 
+            email=email, 
+            password=hashed_password
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
 
 @app.route('/delete_photo/<int:photo_id>', methods=['POST'])
+@login_required
 def delete_photo(photo_id):
     photo = Photo.query.get_or_404(photo_id)
-    session_id = session.get('session_id')
-    now = datetime.utcnow()
+    # Ensure only the owner or an admin can delete the photo
+    if photo.user_id != current_user.id and not current_user.is_admin:
+        flash('You do not have permission to delete this photo.', 'danger')
+        return redirect(url_for('attraction_detail', attraction_id=photo.attraction_id))
+    
+    attraction_id = photo.attraction_id
+    db.session.delete(photo)
+    db.session.commit()
+    flash('Photo deleted successfully!', 'success')
+    return redirect(url_for('attraction_detail', attraction_id=attraction_id))
 
-    if session_id == ADMIN_SESSION_ID or (session_id == photo.session_id and now < photo.expiry_time):
-        db.session.delete(photo)
-        db.session.commit()
-        os.remove(os.path.join(app.config['UPLOAD_FOLDER'], photo.filename))
-        flash("Photo deleted.")
-    else:
-        flash("You are not authorized to delete this photo.")
-    return redirect(request.referrer)
 
-@app.context_processor
-def inject_now():
-    return {'now': datetime.utcnow()}
+@app.route('/logout')
+@login_required
+def logout():
+    """User logout"""
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('index'))
+
+@app.route('/profile')
+@login_required
+def profile():
+    """User profile page"""
+    user_photos = Photo.query.filter_by(user_id=current_user.id).order_by(Photo.upload_date.desc()).all()
+    return render_template('profile.html', photos=user_photos)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
