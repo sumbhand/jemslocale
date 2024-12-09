@@ -155,7 +155,6 @@ def attraction_detail(attraction_id):
     return render_template('attraction_detail.html', attraction=attraction, photos=photos)
 
 @app.route('/add_attraction', methods=['GET', 'POST'])
-@login_required
 def add_attraction():
     """Add a new attraction"""
     if request.method == 'POST':
