@@ -1,6 +1,7 @@
 from PIL import Image
 import os
 from werkzeug.utils import secure_filename
+import uuid
 
 def process_and_save_image(photo, upload_folder, target_size=(800, 600), quality=85):
     """

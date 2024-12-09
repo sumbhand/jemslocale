@@ -97,33 +97,62 @@ def list_attractions():
     return render_template('attractions.html', attractions=attractions)
 
 @app.route('/attraction/<int:attraction_id>', methods=['GET', 'POST'])
-@login_required
 def attraction_detail(attraction_id):
     attraction = Attraction.query.get_or_404(attraction_id)
+    
     if request.method == 'POST':
         # Handle photo upload and post creation
-        if 'photo' in request.files:
-            photo = request.files['photo']
-            if photo and allowed_file(photo.filename):
-                filename = secure_filename(photo.filename)
-                photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                # Assuming you have a Photo model with fields `filename`, `caption`, `rating`, `attraction_id`, `user_id`
-                new_photo = Photo(
-                    filename=filename,
-                    caption=request.form['caption'],
-                    rating=int(request.form['rating']),
-                    attraction_id=attraction_id,
-                    user_id=current_user.id,  # Set the current user's ID
-                    upload_date=datetime.utcnow()  # Assuming you have an upload_date field
-                )
-                db.session.add(new_photo)
-                db.session.commit()
-                flash('Photo posted successfully!', 'success')
+        try:
+            if 'photo' in request.files:
+                photo = request.files['photo']
+                
+                if photo and allowed_file(photo.filename):
+                    try:
+                        # Process and save the image
+                        filename = photo_processor.process_and_save_image(
+                            photo, 
+                            app.config['UPLOAD_FOLDER'], 
+                            target_size=(1200, 800)
+                        )
+                        
+                        # Create new photo record
+                        new_photo = Photo(
+                            filename=filename,
+                            caption=request.form['caption'],
+                            rating=int(request.form['rating']),
+                            attraction_id=attraction_id,
+                            user_id=current_user.id,
+                            upload_date=datetime.utcnow()
+                        )
+                        
+                        # Update attraction's average rating
+                        new_rating = int(request.form['rating'])
+                        attraction.total_visits += 1
+                        attraction.average_rating = (
+                            (attraction.average_rating * (attraction.total_visits - 1) + new_rating) / 
+                            attraction.total_visits
+                        )
+                        
+                        db.session.add(new_photo)
+                        db.session.add(attraction)
+                        db.session.commit()
+                        
+                        flash('Photo posted successfully!', 'success')
+                    except Exception as e:
+                        db.session.rollback()
+                        flash(f'Error uploading photo: {str(e)}', 'error')
+                        app.logger.error(f"Photo upload error: {str(e)}")
+                
                 return redirect(url_for('attraction_detail', attraction_id=attraction_id))
-
-    photos = Photo.query.filter_by(attraction_id=attraction_id).all()
+        
+        except Exception as e:
+            flash('An unexpected error occurred.', 'error')
+            app.logger.error(f"Unexpected error in attraction_detail: {str(e)}")
+    
+    # Fetch photos sorted by upload date, most recent first
+    photos = Photo.query.filter_by(attraction_id=attraction_id).order_by(Photo.upload_date.desc()).all()
+    
     return render_template('attraction_detail.html', attraction=attraction, photos=photos)
-
 
 @app.route('/add_attraction', methods=['GET', 'POST'])
 @login_required
@@ -148,8 +177,7 @@ def add_attraction():
                 category=category,
                 weather_suitability=weather,
                 average_rating=0,
-                total_visits=0,
-                user_id=current_user.id  # Add this if your Attraction model has a user_id field
+                total_visits=0
             )
             
             # Add and commit the attraction first
