@@ -8,6 +8,7 @@ import os
 import qrcode
 import uuid
 from datetime import datetime
+import photo_processor
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here'
@@ -77,8 +78,8 @@ def rank_attractions(attractions, user_location=None):
 @app.route('/')
 def index():
     """Home page with featured attractions"""
-    featured_attractions = rank_attractions(Attraction.query.limit(6).all())
-    return render_template('index.html', attractions=featured_attractions)
+    #featured_attractions = rank_attractions(Attraction.query.limit(6).all())
+    return redirect(url_for('list_attractions'))
 
 @app.route('/attractions')
 def list_attractions():
@@ -129,50 +130,85 @@ def attraction_detail(attraction_id):
 def add_attraction():
     """Add a new attraction"""
     if request.method == 'POST':
-        # Extract form data
-        name = request.form['name']
-        description = request.form['description']
-        latitude = float(request.form['latitude'])
-        longitude = float(request.form['longitude'])
-        category = AttractionCategory(request.form['category'])
-        weather = WeatherSuitability(request.form['weather'])
-        
-        # Create new attraction
-        new_attraction = Attraction(
-            name=name,
-            description=description,
-            latitude=latitude,
-            longitude=longitude,
-            category=category,
-            weather_suitability=weather,
-            average_rating=0,
-            total_visits=0
-        )
-        
-        db.session.add(new_attraction)
-        db.session.commit()
-
-        # Handle photo uploads
-        if 'photos' in request.files:
-            photos = request.files.getlist('photos')
-            for photo in photos:
-                if photo and allowed_file(photo.filename):
-                    filename = secure_filename(photo.filename)
-                    photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                    # Assuming you have a Photo model with fields `filename`, `attraction_id`, and `user_id`
-                    new_photo = Photo(
-                        filename=filename,
-                        attraction_id=new_attraction.id,
-                        user_id=current_user.id,  # Set the current user's ID
-                        upload_date=datetime.utcnow()  # Assuming you also have an upload_date field
-                    )
-                    db.session.add(new_photo)
+        try:
+            # Extract form data
+            name = request.form['name']
+            description = request.form['description']
+            latitude = float(request.form['latitude'])
+            longitude = float(request.form['longitude'])
+            category = AttractionCategory(request.form['category'])
+            weather = WeatherSuitability(request.form['weather'])
+            
+            # Create new attraction
+            new_attraction = Attraction(
+                name=name,
+                description=description,
+                latitude=latitude,
+                longitude=longitude,
+                category=category,
+                weather_suitability=weather,
+                average_rating=0,
+                total_visits=0,
+                user_id=current_user.id  # Add this if your Attraction model has a user_id field
+            )
+            
+            # Add and commit the attraction first
+            db.session.add(new_attraction)
             db.session.commit()
-        
-        flash('Attraction added successfully!', 'success')
-        return redirect(url_for('attraction_detail', attraction_id=new_attraction.id))
-    
-    # Render the form to add a new attraction
+
+            # Handle photo uploads
+            if 'photos' in request.files:
+                photos = request.files.getlist('photos')
+                photos_added = 0
+                
+                for photo in photos:
+                    if photo and photo.filename:  # Ensure the file is not empty
+                        try:
+                            filename = photo_processor.process_and_save_image(
+                                photo, 
+                                app.config['UPLOAD_FOLDER'], 
+                                target_size=(800, 600)
+                            )
+                            
+                            # Create photo record
+                            new_photo = Photo(
+                                filename=filename,
+                                attraction_id=new_attraction.id,
+                                user_id=current_user.id,
+                                upload_date=datetime.utcnow()
+                            )
+                            db.session.add(new_photo)
+                            photos_added += 1
+                        
+                        except Exception as e:
+                            flash(f'Error processing image {photo.filename}: {str(e)}', 'error')
+                            app.logger.error(f'Image processing error: {str(e)}')
+                
+                # Commit photo uploads
+                try:
+                    db.session.commit()
+                    if photos_added > 0:
+                        flash(f'Successfully added {photos_added} photo(s) to the attraction.', 'success')
+                except Exception as e:
+                    db.session.rollback()
+                    flash('Error saving photos. Please try again.', 'error')
+                    app.logger.error(f'Photo upload commit error: {str(e)}')
+
+            # Flash success message and redirect
+            flash('Attraction added successfully!', 'success')
+            return redirect(url_for('attraction_detail', attraction_id=new_attraction.id))
+
+        except ValueError as ve:
+            # Handle potential value conversion errors
+            flash(f'Invalid input: {str(ve)}', 'error')
+            db.session.rollback()
+        except Exception as e:
+            # Catch any other unexpected errors
+            flash(f'An error occurred: {str(e)}', 'error')
+            db.session.rollback()
+            app.logger.error(f'Attraction creation error: {str(e)}')
+
+    # GET request - render the form
     categories = [category.value for category in AttractionCategory]
     weathers = [weather.value for weather in WeatherSuitability]
     return render_template('add_attraction.html', categories=categories, weathers=weathers)

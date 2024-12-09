@@ -11,6 +11,8 @@
         }
         .container {
             margin-top: 40px;
+        }
+        .content-container {
             background-color: #fff;
             padding: 20px;
             border-radius: 8px;
@@ -31,7 +33,8 @@
         .post-form {
             margin-bottom: 30px;
         }
-        .post-form input, .post-form textarea {
+        .post-form input,
+        .post-form textarea {
             margin-bottom: 10px;
         }
         .post {
@@ -59,47 +62,65 @@
     </style>
 </head>
 <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="{{ url_for('index') }}">View All Attractions</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('list_attractions') }}">Back to Attractions</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
     <div class="container">
-        <div class="profile-header">
-            <img src="{{ url_for('static', filename='uploads/' ~ (attraction.photos[0].filename if attraction.photos else 'placeholder-image.jpg')) }}" alt="Profile Picture" class="img-fluid rounded-circle" width="150">
-            <h1>{{ attraction.name }}</h1>
-            <p>{{ attraction.description }}</p>
-        </div>
+        <div class="content-container">
+            <div class="profile-header">
+                <img src="{{ url_for('static', filename='uploads/' ~ (attraction.photos[0].filename if attraction.photos else 'placeholder-image.jpg')) }}" alt="Profile Picture" class="img-fluid rounded-circle" width="150">
+                <h1>{{ attraction.name }}</h1>
+                <p>{{ attraction.description }}</p>
+            </div>
 
-        <!-- Form to add new post -->
-        <div class="post-form">
-            <h2>Add a New Post</h2>
-            <form method="POST" enctype="multipart/form-data">
-                <div class="form-group">
-                    <input type="file" class="form-control-file" name="photo" accept="image/*" required>
-                </div>
-                <div class="form-group">
-                    <textarea class="form-control" name="caption" rows="3" placeholder="Add a caption..." required></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="rating">Rating (1-5):</label>
-                    <input type="number" class="form-control" name="rating" min="1" max="5" required>
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">Share Post</button>
-            </form>
-        </div>
-
-        <!-- Display posts -->
-        <div class="posts">
-            {% for photo in photos %}
-                <div class="post">
-                    <img src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}" alt="Post Image" class="img-fluid">
-                    <div class="caption">
-                        <p>{{ photo.caption }}</p>
-                        <span class="rating">&starf; {{ photo.rating }}</span>
-                        {% if current_user.id == photo.user_id or current_user.is_admin %}
-                            <form method="POST" action="{{ url_for('delete_photo', photo_id=photo.id) }}" style="display:inline;">
-                                <button type="submit" class="btn btn-danger btn-sm">✖</button>
-                            </form>
-                        {% endif %}
+            <!-- Form to add new post -->
+            <div class="post-form">
+                <h2>Add a New Post</h2>
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <input type="file" class="form-control-file" name="photo" accept="image/*" required>
                     </div>
-                </div>
-            {% endfor %}
+                    <div class="form-group">
+                        <textarea class="form-control" name="caption" rows="3" placeholder="Add a caption..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="rating">Rating (1-5):</label>
+                        <input type="number" class="form-control" name="rating" min="1" max="5" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Share Post</button>
+                </form>
+            </div>
+
+            <!-- Display posts -->
+            <div class="posts">
+                {% for photo in photos %}
+                    <div class="post">
+                        <img src="{{ url_for('static', filename='uploads/' ~ photo.filename) }}" alt="Post Image" class="img-fluid">
+                        <div class="caption">
+                            <p>{{ photo.caption }}</p>
+                            <span class="rating">&starf; {{ photo.rating }}</span>
+                            {% if current_user.id == photo.user_id or current_user.is_admin %}
+                                <form method="POST" action="{{ url_for('delete_photo', photo_id=photo.id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm">✖</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
         </div>
     </div>
 

@@ -41,6 +41,7 @@ class Photo(db.Model):
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
     attraction_id = db.Column(db.Integer, db.ForeignKey('attraction.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    rating = db.Column(db.Float, nullable=False, default=0.0)
 
     # No need for explicit relationship mappings here as they are defined in Attraction and User models
 
