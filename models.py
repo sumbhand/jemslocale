@@ -12,12 +12,15 @@ class AttractionCategory(enum.Enum):
     NATURE = "Nature"
     ENTERTAINMENT = "Entertainment"
     HISTORICAL = "Historical"
+    RECREATION = "Recreation"
+    DINING = "Dining"
 
 class WeatherSuitability(enum.Enum):
     SUNNY = "Sunny"
     RAINY = "Rainy"
     CLOUDY = "Cloudy"
     ALL_WEATHER = "All Weather"
+    FAIR_WEATHER = "Fair Weather"
 
 class Attraction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
