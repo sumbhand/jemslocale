@@ -1,0 +1,48 @@
+# Ignore files in the instance folder
+instance/
+
+# Ignore files in the static folder
+static/
+
+# Ignore binary files (commonly executables, object files, libraries, etc.)
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.pyc
+*.pyo
+*.pyd
+*.a
+*.out
+*.class
+*.jar
+*.com
+*.lib
+
+# Ignore virtual environments and dependency directories
+venv/
+env/
+__pycache__/
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.swp
+*.bak
+
+# Ignore IDE/editor specific files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Ignore system files (macOS, Windows, Linux)
+.DS_Store
+Thumbs.db
+\.~
+
+# Ignore node_modules if using Node.js
+node_modules/
