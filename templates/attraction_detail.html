@@ -135,7 +135,7 @@
                                     ☆
                                 {% endfor %}
                             </span>
-                            {% if current_user.id == photo.user_id or current_user.is_admin %}
+                            {% if 1234 == photo.user_id or current_user.is_admin %}
                                 <form method="POST" action="{{ url_for('delete_photo', photo_id=photo.id) }}" class="d-inline ml-2">
                                     <button type="submit" class="btn btn-delete" onclick="return confirm('Are you sure you want to delete this photo?');">
                                         <i class="text-danger">✖</i>

@@ -121,7 +121,7 @@ def attraction_detail(attraction_id):
                             caption=request.form['caption'],
                             rating=int(request.form['rating']),
                             attraction_id=attraction_id,
-                            user_id=current_user.id,
+                            user_id=1234,
                             upload_date=datetime.utcnow()
                         )
                         
@@ -201,7 +201,7 @@ def add_attraction():
                             new_photo = Photo(
                                 filename=filename,
                                 attraction_id=new_attraction.id,
-                                user_id=current_user.id,
+                                user_id=1234,
                                 upload_date=datetime.utcnow()
                             )
                             db.session.add(new_photo)
@@ -266,7 +266,7 @@ def add_photo(attraction_id):
         filename=filename,
         caption=request.form['caption'],
         attraction_id=attraction_id,
-        user_id=current_user.id
+        user_id=1234
     )
     db.session.add(new_photo)
     
@@ -275,7 +275,7 @@ def add_photo(attraction_id):
         rating=int(request.form['rating']),
         comment=request.form['caption'],
         attraction_id=attraction_id,
-        user_id=current_user.id,
+        user_id=1234,
         visit_date=datetime.utcnow()
     )
     db.session.add(new_review)
@@ -343,7 +343,7 @@ def register():
 def delete_photo(photo_id):
     photo = Photo.query.get_or_404(photo_id)
     # Ensure only the owner or an admin can delete the photo
-    if photo.user_id != current_user.id and not current_user.is_admin:
+    if photo.user_id != 1234 and not current_user.is_admin:
         flash('You do not have permission to delete this photo.', 'danger')
         return redirect(url_for('attraction_detail', attraction_id=photo.attraction_id))
     
@@ -366,7 +366,7 @@ def logout():
 @login_required
 def profile():
     """User profile page"""
-    user_photos = Photo.query.filter_by(user_id=current_user.id).order_by(Photo.upload_date.desc()).all()
+    user_photos = Photo.query.filter_by(user_id=1234).order_by(Photo.upload_date.desc()).all()
     return render_template('profile.html', photos=user_photos)
 
 if __name__ == '__main__':

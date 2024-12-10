@@ -1,20 +1,26 @@
 import qrcode
+from PIL import Image
 
-def generate_qr(location_id, base_url):
-    qr_url = f"{base_url}/location/{location_id}"
+def generate_qr(base_url, scale_factor=4):
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
+        box_size=10,  # This controls the size of each box in the QR code
         border=4,
     )
-    qr.add_data(qr_url)
+    qr.add_data(base_url)
     qr.make(fit=True)
 
     img = qr.make_image(fill='black', back_color='white')
-    img.save(f"static/location_{location_id}.png")
+
+    # Calculate the new size based on the scale factor
+    new_size = (img.size[0] * scale_factor, img.size[1] * scale_factor)
+    
+    # Resize the image to a higher resolution
+    img = img.resize(new_size, Image.LANCZOS)
+    
+    img.save(f"static/website_high_res.png")
 
 if __name__ == "__main__":
-    base_url = "http://192.168.86.21:5000" # Replace with your actual base URL
-    location_id = 1
-    generate_qr(location_id, base_url)
+    base_url = "https://jemslocale.onrender.com/"  # Replace with your actual base URL
+    generate_qr(base_url)
