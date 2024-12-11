@@ -9,6 +9,7 @@ import qrcode
 import uuid
 from datetime import datetime
 import photo_processor
+from geopy.distance import geodesic
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here'
@@ -55,25 +56,30 @@ def generate_attraction_qr(attraction):
     return filename
 
 def rank_attractions(attractions, user_location=None):
+    user_location = 29.616395, -81.202324
     """
-    Rank attractions based on multiple factors:
-    1. Average rating
-    2. Total visits
-    3. Distance from user (if location provided)
+    Rank attractions based purely on distance from user location.
+    
+    Args:
+        attractions: List of attraction objects
+        user_location: Tuple of (latitude, longitude), defaults to Palm Coast center
+    
+    Returns:
+        Sorted list of attractions from closest to farthest
     """
-    def calculate_score(attraction):
-        rating_weight = attraction.average_rating * 2 if attraction.average_rating else 0
-        visits_weight = attraction.total_visits * 0.5 if attraction.total_visits else 0
+    def calculate_distance(attraction):
+        """
+        Calculate distance between user location and attraction location.
         
-        distance_weight = 0
-        if user_location:
-            # Calculate distance penalty/bonus
-            distance = geodesic(user_location, (attraction.latitude, attraction.longitude)).kilometers
-            distance_weight = max(10 - (distance * 0.1), 0)  # Closer attractions get bonus points
+        Args:
+            attraction: Attraction object
         
-        return rating_weight + visits_weight + distance_weight
+        Returns:
+            Distance in kilometers
+        """
+        return geodesic(user_location, (attraction.latitude, attraction.longitude)).kilometers
 
-    return sorted(attractions, key=calculate_score, reverse=True)
+    return sorted(attractions, key=calculate_distance)
 
 @app.route('/')
 def index():
