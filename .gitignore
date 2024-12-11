@@ -1,8 +1,7 @@
 # Ignore files in the instance folder
-instance/
 
 # Ignore files in the static folder
-static/
+#static/
 
 # Ignore binary files (commonly executables, object files, libraries, etc.)
 *.exe
@@ -19,6 +18,7 @@ static/
 *.jar
 *.com
 *.lib
+*.pyc 
 
 # Ignore virtual environments and dependency directories
 venv/
